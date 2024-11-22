@@ -1,147 +1,141 @@
 # Distributed Meeting Scheduler
 
-## Overview
+## Project Overview
 
-This project implements a distributed system for managing and querying name-time interval data across multiple servers using socket programming. It consists of a main server (ServerM), two auxiliary servers (ServerA and ServerB), and a client application. The system leverages both TCP and UDP sockets for inter-server communication and client-server interaction.
+This project implements a distributed meeting scheduling system using socket programming in C++. The system consists of a client, a main server (serverM), and two backend servers (serverA and serverB). It efficiently finds common time slots for multiple participants while maintaining privacy of individual schedules.
 
 ## System Architecture
 
-- **ServerM**: Central coordinator
-  - TCP Socket: Port 24849 (for client connections)
-  - UDP Socket: Port 23849 (for inter-server communication)
-- **ServerA**: Auxiliary data server
-  - UDP Socket: Port 21849
-- **ServerB**: Auxiliary data server
-  - UDP Socket: Port 22849
-- **Client**: User interface
-  - TCP Socket: Dynamically assigned port
+- **Client**: Initiates requests and displays results
+- **Main Server (serverM)**: Coordinates communication between client and backend servers
+- **Backend Servers (serverA, serverB)**: Store user availability data and perform intersection calculations
 
 ## Key Features
 
-- Multi-socket management (TCP and UDP)
-- Concurrent socket handling using `select()`
-- Socket-based distributed data storage and retrieval
-- Real-time client query processing over TCP sockets
-- Inter-server communication via UDP sockets
+- Distributed architecture for scalability and privacy
+- TCP and UDP socket programming for inter-process communication
+- Efficient algorithms for time interval intersection
+- Dynamic port allocation for flexible deployment
 
 ## Technical Implementation
 
-### ServerM
+### Communication Protocols
 
-1. Initializes both TCP and UDP sockets
-2. Implements a UDP listener for ServerA and ServerB communications
-3. Uses `select()` for managing multiple socket connections
-4. Processes client requests via TCP socket
-5. Orchestrates data retrieval from ServerA and ServerB using UDP sockets
+- Client <-> Main Server: TCP
+- Main Server <-> Backend Servers: UDP
 
-### ServerA and ServerB
+### Data Structures
 
-1. File I/O for data ingestion (a.txt and b.txt respectively)
-2. UDP socket initialization for communication with ServerM
-3. Implements `sendto()` and `recvfrom()` for UDP-based messaging
+- Availability data: Vector of time intervals `vector<vector<int>>`
+- User-to-server mapping: Unordered map `unordered_map<string, char>`
 
-### Client
+### Algorithms
 
-1. TCP socket initialization and connection to ServerM
-2. Utilizes `send()` and `recv()` for data exchange with ServerM
+- Time interval intersection: Custom algorithm to find overlapping time slots
+- Load balancing: Distribution of users across backend servers
 
-## Socket Programming Highlights
+### Distributed Implementation
 
-- **Non-blocking I/O**: Implemented in ServerM to handle multiple connections
-- **Socket Address Structures**: Use of `sockaddr_in` for IPv4 addressing
-- **Error Handling**: Robust error checking for all socket operations
-- **Buffer Management**: Careful handling of send and receive buffers to prevent overflow
-- **Connection Management**: Proper socket closure and resource cleanup
+- Parallel processing of availability data on multiple backend servers
+- Aggregation of results on the main server for final intersection
 
-## Communication Protocols
+## Socket Implementation
 
-- **TCP**: Used for reliable, ordered communication between Client and ServerM
-- **UDP**: Employed for lightweight, fast communication between ServerM and ServerA/B
+The system utilizes both TCP and UDP sockets for communication between different components:
 
-## Performance Considerations
+### TCP Sockets
 
-- Asynchronous UDP communication for reduced latency in inter-server data exchange
-- Efficient socket buffer management to optimize data transfer rates
-- Use of `select()` in ServerM for improved I/O multiplexing
+- **Client-Main Server Communication**:
+  The client establishes a TCP connection with the main server. It uses the `socket()`, `connect()`, `send()`, and `recv()` functions to create a socket, connect to the server, send requests, and receive responses. The client uses a dynamically assigned port for this connection.
 
-## Dependencies
+- **Main Server-Client Communication**:
+  The main server uses `socket()`, `bind()`, `listen()`, and `accept()` functions to create a TCP socket, bind it to a specific port, listen for incoming connections, and accept client connections. It then uses `send()` and `recv()` to communicate with the client.
 
-- Standard C++ libraries: `<string>`, `<fstream>`, `<vector>`, `<set>`
-- Socket programming headers: `<sys/socket.h>`, `<netinet/in.h>`, `<arpa/inet.h>`
-- Custom `header.h` for system-wide configurations
+### UDP Sockets
+
+- **Main Server-Backend Server Communication**:
+  For communication with backend servers, the main server creates UDP sockets using `socket()` and binds them to specific ports with `bind()`. It uses `sendto()` to send requests to backend servers and `recvfrom()` to receive responses.
+
+- **Backend Server-Main Server Communication**:
+  Backend servers (A and B) create UDP sockets with `socket()` and `bind()` functions. They use recvfrom() to receive requests from the main server and `sendto()` to send responses back.
+
+### Error Handling
+
+Robust error handling is implemented for all socket operations. This includes checking return values of socket functions and using perror() to print descriptive error messages if any operation fails.
+
+### Dynamic Port Assignment
+
+The client uses dynamically assigned ports for TCP connections. After connecting to the main server, it retrieves its local port number using `getsockname()` function.
+
+### IPv6 Support
+
+The system is designed to work with both IPv4 and IPv6. It uses the `AI_PASSIVE` flag with `getaddrinfo()` to handle both address families. A custom `get_in_addr()` function is implemented to extract the correct address structure regardless of the IP version used.
+
+## Code Structure
+
+- `client.cpp`: Client implementation
+- `serverM.cpp`: Main server coordination logic
+- `serverA.cpp` & `serverB.cpp`: Backend server implementations
+- `header.h`: Common definitions and includes
+
+## Build and Execution
+
+```bash
+make all
+./serverM
+./serverA
+./serverB
+./client
+```
 
 ## Usage
 
-### Compilation
-
-Compile each component using the following commands:
-
-```bash
-g++ -o serverM serverM.cpp -lsocket -lnsl
-g++ -o serverA serverA.cpp -lsocket -lnsl
-g++ -o serverB serverB.cpp -lsocket -lnsl
-g++ -o client client.cpp -lsocket -lnsl
-```
-
-### Execution
-
 1. Start the servers in the following order:
 
-   ```bash
+   ```
    ./serverM
    ./serverA
    ./serverB
    ```
 
-2. Once all servers are running, start the client:
+2. Launch the client:
 
-   ```bash
+   ```
    ./client
    ```
 
-### Using the Client
-
-1. When prompted, enter a list of names separated by spaces:
+3. When prompted, enter usernames to check schedule availability:
 
    ```
-   Enter names: lilith jameson zein
+   Please enter the usernames to check schedule availability:
+   alice bob charlie
    ```
 
-2. The system will process your request and return the available time slots for the given names.
-
-3. If a name doesn't exist in the system, you'll receive a notification:
+4. The system will process the request and display available time slots:
 
    ```
-   tttt does not exist.
+   Time intervals [[2,3],[17,18]] works for alice, bob, charlie.
    ```
 
-4. To make another query, simply enter a new list of names when prompted.
+5. For a new request, enter more usernames when prompted:
 
-5. To exit the client, use the keyboard interrupt (Ctrl+C).
+   ```
+   -----Start a new request-----
+   Please enter the usernames to check schedule availability:
+   ```
 
-### Example Session
+6. To exit the program, use `Ctrl+C` in each terminal window.
 
-```
-$ ./client
-Enter names: lilith jameson
-Available time slots: [2,3], [5,7]
-Enter names: zein callie
-Available time slots: [1,4], [6,8]
-Enter names: lilith ererer
-ererer does not exist.
-Available time slots for lilith: [1,3], [4,6], [7,9]
-Enter names: ^C
-$
-```
+Note: Ensure that the input files `a.txt` and `b.txt` are present in the same directory as the executables for the backend servers to read user availability data.
 
-### Notes
+## Performance Considerations
 
-- Ensure that the input files (a.txt and b.txt) are in the same directory as ServerA and ServerB executables.
-- The system uses localhost (127.0.0.1) for all connections. Modify the source code if you need to use different IP addresses.
-- The servers will continue running until manually terminated. Use Ctrl+C to stop each server when you're done.
+- Efficient UDP communication for backend server queries
+- Optimized data structures for quick lookups and intersections
+- Scalable to handle multiple concurrent client requests
 
 ## Future Enhancements
 
-- Implement SSL/TLS for secure socket communications
-- Explore asynchronous I/O libraries for improved socket performance
-- Implement socket-level compression for optimized data transfer
+- Integration with calendar systems
+- Support for recurring meetings
+- Web-based frontend for improved accessibility
